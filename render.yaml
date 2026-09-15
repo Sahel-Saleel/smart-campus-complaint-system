@@ -1,7 +1,8 @@
 services:
   - type: web
     name: smart-campus-complaint-system
-    env: python
+    runtime: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app
     envVars:
@@ -18,3 +19,4 @@ databases:
   - name: smart-campus-db
     databaseName: smart_campus_db
     user: campus_user
+    plan: free
