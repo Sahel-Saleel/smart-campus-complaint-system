@@ -1,0 +1,28 @@
+# Flask & Python environment
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+instance/
+
+# Database & SQLite files
+*.db
+*.sqlite
+
+# Log files
+logs/
+*.log
+
+# IDE & system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary & scratch files
+tmpclaude*
+scratch/
+

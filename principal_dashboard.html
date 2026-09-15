@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}Principal Dashboard - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>🔒 Confidential Complaints Dashboard</h1>
+    <p>Only Principal-level access</p>
+</div>
+
+<div class="alert alert-warning">
+    ⚠️ <strong>Sensitive Information:</strong> This section contains confidential complaints. All access is logged for audit purposes.
+</div>
+
+{% if overdue_complaints %}
+<div class="card overdue-alert-section" style="border: 2px solid #dc2626; border-left: 6px solid #dc2626; background: rgba(220, 38, 38, 0.08); margin-bottom: 2rem; padding: 1.5rem;">
+    <h2 style="color: #dc2626; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        🚨 Overdue Complaints (Pending > 7 Days)
+    </h2>
+    <p style="margin-bottom: 1rem; color: var(--text-color);">
+        The following complaints have remained in <strong>Pending</strong> status for more than 7 days without resolution. Attention from department HODs is required.
+    </p>
+    <div class="complaints-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title & Category</th>
+                    <th>Department / Submitter</th>
+                    <th>Submitted Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for complaint in overdue_complaints %}
+                <tr style="border-left: 4px solid #dc2626;">
+                    <td>
+                        <strong>{{ complaint.title }}</strong><br>
+                        <span class="badge" style="background: rgba(220, 38, 38, 0.15); color: #dc2626; border: 1px solid #dc2626; font-size: 0.75rem; margin-top: 0.25rem;">
+                            {{ complaint.category }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>{{ complaint.creator.department if complaint.creator else 'N/A' }}</strong><br>
+                        <small class="text-muted">
+                            {% if complaint.is_anonymous %}
+                                Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.2rem; padding: 0.1rem 0.4rem; font-size: 0.75rem;"
+                                    data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                                    data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                                    data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                                    onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+                            {% else %}
+                                {{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }} ({% if complaint.creator and complaint.creator.registration_number %}{{ complaint.creator.registration_number }}{% endif %})
+                            {% endif %}
+                        </small>
+                    </td>
+                    <td>{{ complaint.created_at.strftime('%b %d, %Y') }}</td>
+                    <td>
+                        <span class="badge" style="background-color: #dc2626; color: #ffffff; font-weight: 700; padding: 0.35rem 0.65rem;">🚨 OVERDUE</span>
+                    </td>
+                    <td>
+                        {% if complaint.is_confidential %}
+                        <a href="{{ url_for('principal.view_confidential_complaint', complaint_id=complaint.id) }}" class="btn btn-small btn-danger">Review</a>
+                        {% else %}
+                        <a href="{{ url_for('principal.view_record', complaint_id=complaint.id) }}" class="btn btn-small btn-danger">Review</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="tabs">
+    <button class="tab-button active" onclick="showTab('complaints')">All Complaints</button>
+    <button class="tab-button" onclick="showTab('audit')">Audit Log</button>
+</div>
+
+<!-- TAB 1: ALL COMPLAINTS -->
+<div id="complaints-tab" class="tab-content active">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>{{ stats.total }}</h3>
+            <p>Total Complaints</p>
+        </div>
+        <div class="stat-card pending">
+            <h3>{{ stats.pending }}</h3>
+            <p>Pending</p>
+        </div>
+        <div class="stat-card in-progress">
+            <h3>{{ stats.in_progress }}</h3>
+            <p>In Progress</p>
+        </div>
+        <div class="stat-card resolved">
+            <h3>{{ stats.resolved }}</h3>
+            <p>Resolved</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.ragging }}</h3>
+            <p>Ragging</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ stats.drug_abuse }}</h3>
+            <p>Drug Abuse</p>
+        </div>
+    </div>
+
+    <div class="filters">
+        <form method="GET" class="filter-form">
+            <div class="filter-group">
+                <select name="category">
+                    <option value="">All Categories</option>
+                    <option value="Ragging" {% if current_category == 'Ragging' %}selected{% endif %}>Ragging</option>
+                    <option value="Drug Abuse" {% if current_category == 'Drug Abuse' %}selected{% endif %}>Drug Abuse</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    <option value="Pending" {% if current_status == 'Pending' %}selected{% endif %}>Pending</option>
+                    <option value="In Progress" {% if current_status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                    <option value="Resolved" {% if current_status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-small">Filter</button>
+        </form>
+    </div>
+
+    {% if active_complaints or resolved_complaints %}
+        {% if active_complaints %}
+            <div class="complaints-section">
+                <h2>Active Complaints</h2>
+                <div class="complaints-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Category</th>
+                                <th>Visibility</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Submitted</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for complaint in active_complaints %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ complaint.title }}</strong>
+                                        {% if complaint.creator and complaint.creator.role == 'admin' %}
+                                            <span class="badge" style="background-color: #0284c7; color: #fff; margin-left: 0.4rem; padding: 0.15rem 0.45rem; font-size: 0.75rem;">📢 HOD Complaint</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>🔒 {{ complaint.category }}</td>
+                                    <td>
+                                        {% if complaint.is_anonymous %}
+                                            Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.2rem; padding: 0.1rem 0.4rem; font-size: 0.75rem;"
+                                                data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                                                data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                                                data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                                                onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+                                        {% elif complaint.creator and complaint.creator.role == 'admin' %}
+                                            <strong>{{ complaint.creator.full_name or complaint.creator.username }}</strong> <span style="font-size: 0.85rem; color: #0284c7;">(HOD - {{ complaint.creator.department }})</span>
+                                        {% else %}
+                                            {{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }} ({% if complaint.creator and complaint.creator.registration_number %}{{ complaint.creator.registration_number }}{% endif %})
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge priority-{{ complaint.priority.lower() }}">{{ complaint.priority }}</span></td>
+                                    <td><span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span></td>
+                                    <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if complaint.is_confidential %}
+                                            <a href="{{ url_for('principal.view_confidential_complaint', complaint_id=complaint.id) }}" class="btn btn-small">View</a>
+                                        {% else %}
+                                            <a href="{{ url_for('complaints.view_complaint', complaint_id=complaint.id) }}" class="btn btn-small">View</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if resolved_complaints %}
+            <div class="complaints-section">
+                <h2>Resolved Complaints</h2>
+                <div class="complaints-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Category</th>
+                                <th>Visibility</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Submitted</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for complaint in resolved_complaints %}
+                                <tr>
+                                    <td><strong>{{ complaint.title }}</strong></td>
+                                    <td>🔒 {{ complaint.category }}</td>
+                                    <td>
+                                        {% if complaint.is_anonymous %}
+                                            Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.2rem; padding: 0.1rem 0.4rem; font-size: 0.75rem;"
+                                                data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                                                data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                                                data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                                                onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+                                        {% else %}
+                                            {{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }} ({% if complaint.creator and complaint.creator.registration_number %}{{ complaint.creator.registration_number }}{% endif %})
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge priority-{{ complaint.priority.lower() }}">{{ complaint.priority }}</span></td>
+                                    <td><span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span></td>
+                                    <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if complaint.is_confidential %}
+                                            <a href="{{ url_for('principal.view_confidential_complaint', complaint_id=complaint.id) }}" class="btn btn-small">View</a>
+                                        {% else %}
+                                            <a href="{{ url_for('complaints.view_complaint', complaint_id=complaint.id) }}" class="btn btn-small">View</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="empty-state">
+            <p>✓ No confidential complaints</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- TAB 2: AUDIT LOG -->
+<div id="audit-tab" class="tab-content" style="display: none;">
+    <div class="card">
+        <h2>System Audit Log</h2>
+        <p>This log tracks all access to confidential complaints and system actions.</p>
+        <a href="{{ url_for('principal.audit_log') }}" class="btn">View Full Audit Log</a>
+    </div>
+</div>
+
+<style>
+    .tabs {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--light-gray);
+    }
+
+    .tab-button {
+        padding: 0.75rem 1.5rem;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+        font-size: 1rem;
+        color: #7f8c8d;
+        transition: all 0.3s;
+    }
+
+    .tab-button.active {
+        color: var(--primary-color);
+        border-bottom-color: var(--secondary-color);
+        font-weight: 600;
+    }
+
+    .tab-button:hover {
+        color: var(--primary-color);
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .filters {
+        padding: 1.5rem;
+        border-radius: 22px;
+        margin-bottom: 2rem;
+    }
+
+    .filter-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        align-items: flex-end;
+    }
+
+    .filter-group select {
+        margin-top: 0.25rem;
+    }
+
+    .complaints-section {
+        margin-top: 1.5rem;
+    }
+
+    .complaints-section h2 {
+        margin-bottom: 0.75rem;
+        font-size: 1.1rem;
+    }
+</style>
+
+<script>
+    function showTab(tabName) {
+        // Hide all tabs
+        document.getElementById('complaints-tab').classList.remove('active');
+        document.getElementById('audit-tab').classList.remove('active');
+
+        // Remove active class from buttons
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // Show selected tab
+        document.getElementById(tabName + '-tab').classList.add('active');
+
+        // Set button active
+        event.target.classList.add('active');
+    }
+</script>
+{% endblock %}

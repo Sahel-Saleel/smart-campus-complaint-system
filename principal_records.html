@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Complaint Records - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Complaint Records</h1>
+    <p>Read-only overview of every complaint and its current status.</p>
+</div>
+
+<div class="alert alert-info">
+    This page is for monitoring only. Ragging and Drug Abuse complaints are handled from the Principal Inbox.
+</div>
+
+{% if overdue_complaints %}
+<div class="card overdue-alert-section" style="border: 2px solid #dc2626; border-left: 6px solid #dc2626; background: rgba(220, 38, 38, 0.08); margin-bottom: 2rem; padding: 1.5rem;">
+    <h2 style="color: #dc2626; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        🚨 Overdue Complaints (Pending > 7 Days)
+    </h2>
+    <p style="margin-bottom: 1rem; color: var(--text-color);">
+        The following complaints have remained in <strong>Pending</strong> status for more than 7 days without resolution. Attention from department HODs is required.
+    </p>
+    <div class="complaints-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title & Category</th>
+                    <th>Department / Submitter</th>
+                    <th>Submitted Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for complaint in overdue_complaints %}
+                <tr style="border-left: 4px solid #dc2626;">
+                    <td>
+                        <strong>{{ complaint.title }}</strong><br>
+                        <span class="badge" style="background: rgba(220, 38, 38, 0.15); color: #dc2626; border: 1px solid #dc2626; font-size: 0.75rem; margin-top: 0.25rem;">
+                            {{ complaint.category }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>{{ complaint.creator.department if complaint.creator else 'N/A' }}</strong><br>
+                        <small class="text-muted">
+                            {% if complaint.is_anonymous %}
+                                Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.2rem; padding: 0.1rem 0.4rem; font-size: 0.75rem;"
+                                    data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                                    data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                                    data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                                    onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+                            {% else %}
+                                {{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }} ({% if complaint.creator and complaint.creator.registration_number %}{{ complaint.creator.registration_number }}{% endif %})
+                            {% endif %}
+                        </small>
+                    </td>
+                    <td>{{ complaint.created_at.strftime('%b %d, %Y') }}</td>
+                    <td>
+                        <span class="badge" style="background-color: #dc2626; color: #ffffff; font-weight: 700; padding: 0.35rem 0.65rem;">🚨 OVERDUE</span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('principal.view_record', complaint_id=complaint.id) }}" class="btn btn-small btn-danger">Review</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if complaints %}
+<div class="complaints-table">
+    <table>
+        <thead>
+            <tr>
+                <th>Complaint</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for complaint in complaints %}
+            <tr>
+                <td>{{ complaint.title }}</td>
+                <td>
+                    <span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span>
+                    {% if complaint.is_deleted %}
+                        <span class="badge" style="background-color: #dc2626; color: #ffffff; margin-left: 0.4rem; font-weight: 700;">Archived</span>
+                    {% endif %}
+                </td>
+                <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
+                <td><a href="{{ url_for('principal.view_record', complaint_id=complaint.id) }}" class="btn btn-small">View details</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state"><p>No complaints have been submitted.</p></div>
+{% endif %}
+{% endblock %}
