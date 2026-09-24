@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: smart-campus-complaint-system
+    name: smart_campus_complaint_system
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
