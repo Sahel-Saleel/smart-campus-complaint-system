@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}View Confidential Complaint - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="complaint-view">
+    <h1>🔒 {{ complaint.title }}</h1>
+
+    <div class="card complaint-details">
+        <div class="complaint-meta">
+            <div class="meta-item">
+                <strong>Category:</strong> {{ complaint.category }}
+            </div>
+            <div class="meta-item">
+                <strong>Status:</strong>
+                <span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span>
+            </div>
+            <div class="meta-item">
+                <strong>Priority:</strong>
+                <span class="badge priority-{{ complaint.priority.lower() }}">{{ complaint.priority }}</span>
+            </div>
+            <div class="meta-item">
+                <strong>Submitted:</strong> {{ complaint.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </div>
+        </div>
+
+        <div class="complaint-submitted-by">
+            <strong>Submitted By:</strong>
+            {% if complaint.is_anonymous %}
+                Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.4rem; padding: 0.2rem 0.5rem; font-size: 0.8rem;"
+                    data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                    data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                    data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                    onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+            {% else %}
+                {{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }} ({% if complaint.creator and complaint.creator.registration_number %}{{ complaint.creator.registration_number }}{% endif %})
+            {% endif %}
+        </div>
+
+        <div class="complaint-description">
+            <h3>Description</h3>
+            <p>{{ complaint.description }}</p>
+        </div>
+
+        <div class="complaint-management">
+            <h3>Management</h3>
+            <form id="updateForm" onsubmit="return updateComplaint({{ complaint.id }})">
+                <div class="form-group">
+                    <label for="status">Status:</label>
+                    <select id="status" name="status">
+                        <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                        <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                        <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="priority">Priority:</label>
+                    <select id="priority" name="priority">
+                        <option value="Low" {% if complaint.priority == 'Low' %}selected{% endif %}>Low</option>
+                        <option value="Medium" {% if complaint.priority == 'Medium' %}selected{% endif %}>Medium</option>
+                        <option value="High" {% if complaint.priority == 'High' %}selected{% endif %}>High</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="remarks">Remarks:</label>
+                    <textarea id="remarks" name="remarks">{{ complaint.remarks or '' }}</textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+        </div>
+
+        {% if complaint.remarks %}
+            <div class="complaint-remarks">
+                <h3>Current Remarks</h3>
+                <p>{{ complaint.remarks }}</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    async function updateComplaint(complaintId) {
+        const status = document.getElementById('status').value;
+        const priority = document.getElementById('priority').value;
+        const remarks = document.getElementById('remarks').value;
+
+        try {
+            const response = await fetch(`/api/confidential/${complaintId}/status`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ status, remarks })
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Updated successfully');
+                location.reload();
+            } else {
+                alert(data.error);
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+        return false;
+    }
+
+    async function revealIdentity(complaintId) {
+        if (!confirm('Reveal this user\'s identity? This action is logged.')) return;
+
+        try {
+            const response = await fetch(`/api/confidential/${complaintId}/reveal-identity`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Identity revealed: ' + data.creator_name);
+                location.reload();
+            } else {
+                alert(data.error);
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+</script>
+{% endblock %}

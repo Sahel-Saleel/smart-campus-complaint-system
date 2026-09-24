@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Complaint Details - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="complaint-view">
+    <div class="complaint-actions">
+        <h1>{{ complaint.title }}</h1>
+        <a href="{{ url_for('principal.dashboard') }}" class="btn btn-small">Back to records</a>
+    </div>
+
+    <div class="alert alert-info">This complaint is shown in read-only mode.</div>
+
+    <div class="card complaint-details">
+        <div class="complaint-meta">
+            <div class="meta-item"><strong>Category:</strong> {{ complaint.category }}</div>
+            <div class="meta-item">
+                <strong>Status:</strong>
+                <span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span>
+            </div>
+            <div class="meta-item"><strong>Priority:</strong> {{ complaint.priority }}</div>
+            <div class="meta-item"><strong>Submitted:</strong> {{ complaint.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+            <div class="meta-item">
+                <strong>Submitted by:</strong>
+                {% if complaint.is_anonymous %}
+                    Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.4rem; padding: 0.2rem 0.5rem; font-size: 0.8rem;"
+                        data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                        data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                        data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                        onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+                {% elif complaint.creator %}
+                    {{ complaint.creator.full_name or complaint.creator.username }} ({% if complaint.creator.registration_number %}{{ complaint.creator.registration_number }}{% else %}{{ complaint.creator.email }}{% endif %})
+                {% else %}
+                    Unknown User
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="complaint-description">
+            <h3>Description</h3>
+            <p>{{ complaint.description }}</p>
+        </div>
+
+        {% if complaint.remarks %}
+        <div class="complaint-remarks">
+            <h3>Remarks</h3>
+            <p>{{ complaint.remarks }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

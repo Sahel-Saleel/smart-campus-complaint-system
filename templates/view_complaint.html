@@ -1,0 +1,849 @@
+{% extends "base.html" %}
+
+{% block title %}View Complaint - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="complaint-view">
+    <div class="complaint-actions">
+        <h1>{{ complaint.title }}</h1>
+        <div class="actions">
+            {% if is_owner %}
+                <a href="{{ url_for('complaints.edit_complaint', complaint_id=complaint.id) }}" class="btn btn-small">Edit</a>
+                <form method="POST" action="{{ url_for('complaints.delete_complaint', complaint_id=complaint.id) }}" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Are you sure?')">Delete</button>
+                </form>
+            {% endif %}
+            <a href="{{ url_for(dashboard_endpoint) }}" class="btn btn-small">Back</a>
+        </div>
+    </div>
+
+    <div class="card complaint-details">
+        <div class="complaint-meta">
+            <div class="meta-item">
+                <strong>Category:</strong>
+                {% if complaint.is_confidential %}
+                    🔒 {{ complaint.category }} (Confidential)
+                {% else %}
+                    {{ complaint.category }}
+                {% endif %}
+            </div>
+            <div class="meta-item">
+                <strong>Status:</strong>
+                <span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span>
+            </div>
+            <div class="meta-item">
+                <strong>Priority:</strong>
+                <span class="badge priority-{{ complaint.priority.lower() }}">{{ complaint.priority }}</span>
+            </div>
+            <div class="meta-item">
+                <strong>Submitted:</strong>
+                {{ complaint.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </div>
+            {% if complaint.location %}
+            <div class="meta-item">
+                <strong>📍 Location:</strong>
+                {{ complaint.location }}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="complaint-submitted-by">
+            <strong>Submitted By:</strong>
+            {% if complaint.is_anonymous and current_user.role != 'principal' %}
+                <span class="text-muted">Anonymous Student</span>
+            {% elif complaint.is_anonymous and current_user.role == 'principal' %}
+                Anonymous <button type="button" class="btn btn-small btn-outline-danger" style="margin-left: 0.4rem; padding: 0.2rem 0.5rem; font-size: 0.8rem;"
+                    data-name="{{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }}"
+                    data-reg="{{ complaint.creator.registration_number if (complaint.creator and complaint.creator.registration_number) else 'N/A' }}"
+                    data-dept="{{ complaint.creator.department if (complaint.creator and complaint.creator.department) else 'N/A' }}"
+                    onclick="alert('Restricted Unmask Data:\nName: ' + this.dataset.name + '\nReg: ' + this.dataset.reg + '\nDept: ' + this.dataset.dept)">Unmask</button>
+            {% else %}
+                {{ complaint.creator.full_name or complaint.creator.username if complaint.creator else 'Unknown' }} {% if complaint.creator and complaint.creator.registration_number %}({{ complaint.creator.registration_number }}){% endif %}
+            {% endif %}
+        </div>
+
+        {% if current_user.role in ['admin', 'worker', 'maintenance_worker'] %}
+        <div class="card status-update-card" style="margin-top: 1.5rem; padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); background-color: var(--card-bg, #ffffff);">
+            <h3 style="margin-bottom: 0.75rem; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">⚙️ Update Complaint Status</h3>
+            <form method="POST" action="{{ url_for('complaints.update_status', complaint_id=complaint.id) }}" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <select name="status" id="status" required style="padding: 0.55rem 1rem; border-radius: 6px; border: 1px solid var(--border-color, #cbd5e1); font-size: 0.95rem; background-color: var(--bg-color, #fff); color: var(--text-color, #333); flex: 0 0 200px;">
+                    <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                    <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                    <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                </select>
+                <button type="submit" class="btn btn-primary" style="padding: 0.55rem 1.4rem; white-space: nowrap; border-radius: 6px;">Update Status</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if can_edit_complaint %}
+            <div class="admin-action-panel">
+                <h3>Admin Actions</h3>
+                <p class="hint-text">Update complaint status, priority or add remarks for the assigned department.</p>
+
+                <div class="admin-action-grid">
+                    <div class="admin-action-card">
+                        <label for="statusSelect"><strong>Status</strong></label>
+                        <select id="statusSelect">
+                            <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                            <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                            <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                        </select>
+                        <button type="button" class="btn btn-primary" onclick="updateStatus({{ complaint.id }})">Update Status</button>
+                    </div>
+
+                    <div class="admin-action-card">
+                        <label for="prioritySelect"><strong>Priority</strong></label>
+                        <select id="prioritySelect">
+                            <option value="Low" {% if complaint.priority == 'Low' %}selected{% endif %}>Low</option>
+                            <option value="Medium" {% if complaint.priority == 'Medium' %}selected{% endif %}>Medium</option>
+                            <option value="High" {% if complaint.priority == 'High' %}selected{% endif %}>High</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary" onclick="updatePriority({{ complaint.id }})">Update Priority</button>
+                    </div>
+                </div>
+
+                <div class="admin-action-card remarks-card">
+                    <label for="remarksInput"><strong>Remarks</strong></label>
+                    <textarea id="remarksInput" rows="4" placeholder="Add remarks for the student or department.">{{ complaint.remarks or '' }}</textarea>
+                    <button type="button" class="btn btn-secondary" onclick="saveRemarks({{ complaint.id }})">Save Remarks</button>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="complaint-description">
+            <h3>Description</h3>
+            <p>{{ complaint.description }}</p>
+        </div>
+
+        {% if complaint.remarks %}
+            <div class="complaint-remarks">
+                <h3>Admin Remarks</h3>
+                <div class="remarks-content">{{ complaint.remarks }}</div>
+            </div>
+        {% endif %}
+
+        {% if not complaint.is_confidential %}
+            {% if current_user.role in ['student', 'staff'] %}
+                <div class="complaint-upvotes">
+                    <h3>Support This Complaint</h3>
+                    <div class="upvote-section">
+                        <p>Upvotes: <strong>{{ complaint.upvote_count }}</strong></p>
+                        {% if not is_owner %}
+                            <button id="upvoteBtn" class="btn btn-success" onclick="toggleUpvote({{ complaint.id }})">
+                                {% if has_upvoted %}👍 You Upvoted{% else %}👍 Upvote This Complaint{% endif %}
+                            </button>
+                        {% endif %}
+                        {% if complaint.upvote_count > 0 %}
+                            <button class="btn btn-small" onclick="showUpvoters()">View Upvoters</button>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Supporting Comments Section -->
+            <div class="supporting-comments-section" style="margin-top: 2rem;">
+                <h3>Supporting Comments</h3>
+                <p class="hint-text">Add your own experience or details to support this complaint</p>
+
+                {% if not is_owner %}
+                <div class="add-comment-form">
+                    <h4>Add Your Comment</h4>
+                    <div class="form-group">
+                        <textarea id="commentText" placeholder="Share your experience or additional details (max 1000 characters)" maxlength="1000" rows="4"></textarea>
+                        <p class="hint">
+                            <small>Characters remaining: <span id="charCount">1000</span>/1000</small>
+                        </p>
+                    </div>
+                    {% if current_user.role in ['student', 'staff'] %}
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="commentAnonymous">
+                            Post anonymously
+                        </label>
+                    </div>
+                    {% endif %}
+                    <button type="button" class="btn btn-secondary" onclick="submitComment({{ complaint.id }})">
+                        💬 Post Comment
+                    </button>
+                </div>
+                {% endif %}
+
+                <!-- Comments List -->
+                <div id="commentsList" style="margin-top: 1.5rem;">
+                    <p style="color: #7f8c8d; text-align: center;">Loading comments...</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Upvoters Modal -->
+<div id="upvotersModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>People Who Upvoted</h2>
+            <button class="modal-close" onclick="document.getElementById('upvotersModal').classList.remove('show')">&times;</button>
+        </div>
+        <div id="upvotersList"></div>
+    </div>
+</div>
+
+<style>
+    .complaint-view {
+        max-width: 800px;
+    }
+
+    .complaint-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+    }
+
+    .complaint-actions h1 {
+        color: var(--primary-color);
+        flex: 1;
+    }
+
+    .actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .complaint-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 2px solid var(--light-gray);
+    }
+
+    .meta-item {
+        font-size: 0.95rem;
+    }
+
+    .complaint-submitted-by {
+        font-size: 0.9rem;
+        color: #7f8c8d;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--light-gray);
+    }
+
+    .complaint-description {
+        margin-bottom: 2rem;
+    }
+
+    .complaint-description h3 {
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+
+    .complaint-description p {
+        line-height: 1.8;
+        color: #555;
+    }
+
+    /* ========== Three info panels: unified light mode ========== */
+
+    .complaint-remarks {
+        background-color: #f0f8ff;
+        padding: 1.5rem;
+        border-left: 4px solid var(--secondary-color);
+        border-radius: 4px;
+        margin-bottom: 2rem;
+    }
+
+    .complaint-remarks h3 {
+        color: var(--secondary-color);
+        margin-bottom: 1rem;
+    }
+
+    .remarks-content {
+        color: #555;
+        line-height: 1.8;
+    }
+
+    .complaint-upvotes {
+        background-color: #f0f8ff;
+        padding: 1.5rem;
+        border-left: 4px solid var(--success-color);
+        border-radius: 4px;
+        margin-bottom: 2rem;
+    }
+
+    .complaint-upvotes h3 {
+        color: var(--success-color);
+        margin-bottom: 1rem;
+    }
+
+    .upvote-section {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .upvote-section p {
+        margin: 0;
+    }
+
+    .supporting-comments-section {
+        background-color: #f0f8ff;
+        padding: 1.5rem;
+        border-left: 4px solid #5b9bd5;
+        border-radius: 4px;
+        margin-bottom: 2rem;
+    }
+
+    .supporting-comments-section h3 {
+        color: #5b9bd5;
+        margin-bottom: 0.5rem;
+    }
+
+    /* ========== Supporting Comments inner elements ========== */
+
+    .hint-text {
+        color: #7f8c8d;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    .add-comment-form {
+        background: white;
+        padding: 1rem;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+    }
+
+    .add-comment-form h4 {
+        margin: 0 0 1rem 0;
+        color: #333;
+    }
+
+    .add-comment-form textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: inherit;
+        resize: vertical;
+        font-size: 0.95rem;
+    }
+
+    .add-comment-form textarea:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 4px rgba(0, 123, 255, 0.2);
+    }
+
+    .add-comment-form .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .add-comment-form label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        color: #555;
+    }
+
+    .add-comment-form input[type="checkbox"] {
+        cursor: pointer;
+    }
+
+    .comment-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: box-shadow 0.3s ease;
+    }
+
+    .comment-item:hover {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .comment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .comment-author {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .comment-timestamp {
+        font-size: 0.85rem;
+        color: #7f8c8d;
+    }
+
+    .comment-text {
+        color: #555;
+        line-height: 1.6;
+        margin-bottom: 0.5rem;
+    }
+
+    .comment-anonymous {
+        font-size: 0.85rem;
+        color: #7f8c8d;
+        font-style: italic;
+    }
+
+    .empty-comments {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #7f8c8d;
+    }
+
+    .empty-comments p {
+        margin: 0;
+    }
+
+    .comments-count {
+        background: #f0f8ff;
+        color: #5b9bd5;
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        margin-top: 1rem;
+        text-align: center;
+    }
+
+    /* ========== Admin Action Panel ========== */
+
+    .admin-action-panel {
+        background: #f7f8fc;
+        padding: 1.5rem;
+        border: 1px solid #dce2f0;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+
+    .admin-action-panel h3 {
+        margin-top: 0;
+        color: #1f3d7a;
+    }
+
+    .admin-action-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .admin-action-card {
+        background: white;
+        border: 1px solid #e0e4f1;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+
+    .admin-action-card label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #2c3e50;
+    }
+
+    .admin-action-card select,
+    .admin-action-card textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ccd4e4;
+        border-radius: 6px;
+        margin-bottom: 0.75rem;
+        font-family: inherit;
+    }
+
+    .remarks-card {
+        grid-column: 1 / -1;
+    }
+
+    /* ========== DARK MODE: Unified panel styles ========== */
+
+    /* All three info panels share the same dark background and text color */
+    body[data-theme="dark"] .complaint-remarks,
+    body[data-theme="dark"] .complaint-upvotes,
+    body[data-theme="dark"] .supporting-comments-section {
+        background-color: #1a2744;
+        color: #c8d6e5;
+    }
+
+    /* Remarks: blue accent */
+    body[data-theme="dark"] .complaint-remarks {
+        border-left-color: #5b9bd5;
+    }
+    body[data-theme="dark"] .complaint-remarks h3 {
+        color: #7ec8f8;
+    }
+    body[data-theme="dark"] .remarks-content {
+        color: #c8d6e5;
+    }
+
+    /* Upvotes: green accent */
+    body[data-theme="dark"] .complaint-upvotes {
+        border-left-color: #38d9a9;
+    }
+    body[data-theme="dark"] .complaint-upvotes h3 {
+        color: #63e6be;
+    }
+    body[data-theme="dark"] .upvote-section p {
+        color: #c8d6e5;
+    }
+
+    /* Supporting Comments: cyan accent */
+    body[data-theme="dark"] .supporting-comments-section {
+        border-left-color: #66d9ef;
+    }
+    body[data-theme="dark"] .supporting-comments-section h3 {
+        color: #89e4f4;
+    }
+    body[data-theme="dark"] .supporting-comments-section .hint-text {
+        color: #8fa3b8;
+    }
+    body[data-theme="dark"] .supporting-comments-section .empty-comments,
+    body[data-theme="dark"] .supporting-comments-section .empty-comments p {
+        color: #8fa3b8;
+    }
+    body[data-theme="dark"] .supporting-comments-section .comments-count {
+        background-color: #1e2f4d;
+        color: #89e4f4;
+    }
+
+    /* Comment items inside supporting comments */
+    body[data-theme="dark"] .comment-item {
+        background: #1e2f4d;
+        border-color: #2a3f5f;
+    }
+    body[data-theme="dark"] .comment-header {
+        border-bottom-color: #2a3f5f;
+    }
+    body[data-theme="dark"] .comment-author {
+        color: #e2e8f0;
+    }
+    body[data-theme="dark"] .comment-text {
+        color: #c8d6e5;
+    }
+    body[data-theme="dark"] .comment-timestamp,
+    body[data-theme="dark"] .comment-anonymous {
+        color: #8fa3b8;
+    }
+
+    /* Add comment form */
+    body[data-theme="dark"] .add-comment-form {
+        background: #1e2f4d;
+        border-color: #2a3f5f;
+    }
+    body[data-theme="dark"] .add-comment-form h4 {
+        color: #e2e8f0;
+    }
+    body[data-theme="dark"] .add-comment-form label {
+        color: #c8d6e5;
+    }
+    body[data-theme="dark"] .add-comment-form textarea {
+        background: #162036;
+        border-color: #2a3f5f;
+        color: #e2e8f0;
+    }
+
+    /* Admin Actions panel */
+    body[data-theme="dark"] .admin-action-panel {
+        background: #1a2744;
+        border-color: #2a3f5f;
+        color: #c8d6e5;
+    }
+    body[data-theme="dark"] .admin-action-panel h3 {
+        color: #7ec8f8;
+    }
+    body[data-theme="dark"] .admin-action-panel .hint-text {
+        color: #8fa3b8;
+    }
+    body[data-theme="dark"] .admin-action-card {
+        background: #1e2f4d;
+        border-color: #2a3f5f;
+    }
+    body[data-theme="dark"] .admin-action-card label {
+        color: #c8d6e5;
+    }
+    body[data-theme="dark"] .admin-action-card select,
+    body[data-theme="dark"] .admin-action-card textarea {
+        background: #162036;
+        border-color: #2a3f5f;
+        color: #e2e8f0;
+    }
+</style>
+
+<script>
+    // Load supporting comments on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const commentText = document.getElementById('commentText');
+        if (commentText) {
+            commentText.addEventListener('input', updateCharCount);
+        }
+        loadComments();
+    });
+
+    async function toggleUpvote(complaintId) {
+        const hasUpvoted = document.getElementById('upvoteBtn').textContent.includes('You Upvoted');
+        const url = hasUpvoted
+            ? `/api/complaints/${complaintId}/upvote/remove`
+            : `/api/complaints/${complaintId}/upvote`;
+
+        try {
+            const response = await fetch(url, { method: 'POST' });
+            const data = await response.json();
+
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Error');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function showUpvoters() {
+        try {
+            const response = await fetch(`/api/complaints/{{ complaint.id }}/upvoters`);
+            const data = await response.json();
+
+            const upvotersData = data.data || data;
+            const upvoters = upvotersData.upvoters || [];
+
+            let html = '<ul style="list-style: none; padding: 0;">';
+            if (upvoters.length > 0) {
+                upvoters.forEach(upvoter => {
+                    html += `<li style="padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                        <strong>${escapeHtml(upvoter.username || 'User')}</strong>
+                        <br><small style="color: #7f8c8d;">${upvoter.created_at || ''}</small>
+                    </li>`;
+                });
+            } else {
+                html += '<li style="padding: 0.5rem 0; color: #7f8c8d;">No upvoters yet.</li>';
+            }
+            html += '</ul>';
+
+            document.getElementById('upvotersList').innerHTML = html;
+            document.getElementById('upvotersModal').classList.add('show');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    function updateCharCount() {
+        const commentText = document.getElementById('commentText');
+        const charCount = document.getElementById('charCount');
+        const remaining = 1000 - commentText.value.length;
+        charCount.textContent = remaining;
+    }
+
+    async function loadComments() {
+        const commentsList = document.getElementById('commentsList');
+        if (!commentsList) return;
+
+        try {
+            const response = await fetch(`/api/complaints/{{ complaint.id }}/comments`);
+            const data = await response.json();
+
+            if (data.success === false) {
+                commentsList.innerHTML = `<p style="color: #d32f2f;">${escapeHtml(data.message || data.error || 'Error loading comments')}</p>`;
+                return;
+            }
+
+            const commentsData = data.data || data;
+            const comments = commentsData.comments || [];
+            const count = commentsData.count !== undefined ? commentsData.count : comments.length;
+
+            if (comments.length > 0) {
+                let html = '';
+                comments.forEach(comment => {
+                    let badgeHtml = '';
+                    if (comment.commenter_role === 'admin') {
+                        badgeHtml = ' <span class="badge bg-warning text-dark" style="margin-left: 0.4rem; background-color: #eab308; color: #1e293b; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; vertical-align: middle;">Official Update</span>';
+                    } else if (['maintenance_worker', 'worker'].includes(comment.commenter_role)) {
+                        badgeHtml = ' <span class="badge bg-info" style="margin-left: 0.4rem; background-color: #0284c7; color: #ffffff; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; vertical-align: middle;">Maintenance Team</span>';
+                    }
+                    html += `
+                        <div class="comment-item">
+                            <div class="comment-header">
+                                <span class="comment-author">${escapeHtml(comment.commenter_name || 'Anonymous')}${badgeHtml}</span>
+                                <span class="comment-timestamp">${formatDate(comment.created_at)}</span>
+                            </div>
+                            <div class="comment-text">${escapeHtml(comment.comment)}</div>
+                            ${comment.is_anonymous ? '<div class="comment-anonymous">(Posted anonymously)</div>' : ''}
+                        </div>
+                    `;
+                });
+                commentsList.innerHTML = html;
+            } else {
+                commentsList.innerHTML = `
+                    <div class="empty-comments">
+                        <p>No comments yet. Be the first to share your experience!</p>
+                    </div>
+                `;
+            }
+
+            // Show count and prevent duplicate count labels on reload
+            const parent = commentsList.parentNode;
+            const existingCount = parent ? parent.querySelector('.comments-count') : null;
+            if (existingCount) {
+                existingCount.remove();
+            }
+            let countHtml = `<div class="comments-count">${count} supporting comment${count !== 1 ? 's' : ''}</div>`;
+            commentsList.insertAdjacentHTML('afterend', countHtml);
+        } catch (e) {
+            commentsList.innerHTML = `<p style="color: #d32f2f;">Error loading comments: ${e.message}</p>`;
+        }
+    }
+
+    async function submitComment(complaintId) {
+        const commentText = document.getElementById('commentText');
+        const isAnonymous = document.getElementById('commentAnonymous');
+
+        if (!commentText.value.trim()) {
+            alert('Please enter a comment');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/complaints/${complaintId}/comment`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    comment: commentText.value.trim(),
+                    is_anonymous: isAnonymous ? isAnonymous.checked : false
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                commentText.value = '';
+                if (isAnonymous) isAnonymous.checked = false;
+                updateCharCount();
+                alert('Comment posted successfully!');
+                loadComments();
+            } else {
+                alert(data.error || 'Error posting comment');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        if (date.toDateString() === today.toDateString()) {
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        } else if (date.toDateString() === yesterday.toDateString()) {
+            return 'Yesterday';
+        } else {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+    }
+
+    async function saveRemarks(complaintId) {
+        const remarksInput = document.getElementById('remarksInput');
+        const remarks = remarksInput.value.trim();
+
+        if (!remarks) {
+            alert('Please enter remarks before saving.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/complaints/${complaintId}/remarks`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ remarks })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Remarks updated successfully.');
+            } else {
+                alert(data.error || 'Unable to save remarks.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function updateStatus(complaintId) {
+        const select = document.getElementById('statusSelect');
+        const status = select.value;
+
+        try {
+            const response = await fetch(`/api/complaints/${complaintId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status, remarks: document.getElementById('remarksInput')?.value.trim() || '' })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Status updated to ' + data.status);
+                location.reload();
+            } else {
+                alert(data.error || 'Unable to update status.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function updatePriority(complaintId) {
+        const select = document.getElementById('prioritySelect');
+        const priority = select.value;
+
+        try {
+            const response = await fetch(`/api/complaints/${complaintId}/priority`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ priority })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Priority updated to ' + data.priority);
+                location.reload();
+            } else {
+                alert(data.error || 'Unable to update priority.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+</script>
+{% endblock %}

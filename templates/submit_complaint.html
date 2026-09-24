@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Complaint - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>{% if current_user.role == 'admin' %}Submit Complaint to Principal{% else %}Submit New Complaint{% endif %}</h1>
+</div>
+
+{% if current_user.role == 'admin' %}
+    <div class="alert alert-info" style="background-color: #e0f2fe; border-left: 4px solid #0284c7; color: #0369a1; padding: 1rem; margin-bottom: 1.5rem; border-radius: 6px;">
+        🔒 <strong>HOD Escalation to Principal:</strong> As a Department HOD/Admin, your complaint will be submitted directly to the Principal for review and action.
+    </div>
+{% endif %}
+
+{% if errors %}
+    <div class="alert alert-error">
+        {% for error in errors %}
+            <p>✗ {{ error }}</p>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<!-- Duplicate Detection Warning -->
+{% if show_duplicate_warning and similar_complaints %}
+<div class="card alert-warning" style="border-left: 4px solid #ff6b6b;">
+    <h2 style="margin-top: 0; color: #d63031;">⚠️ Similar Complaints Found</h2>
+    <p>We found {{ similar_complaints|length }} similar complaint(s) already in the system. Before creating a new complaint, please consider:</p>
+    
+    <div class="duplicate-detection-section">
+        <h3>Existing Similar Complaints:</h3>
+        
+        {% for complaint, score in similar_complaints %}
+        <div class="similar-complaint-card">
+            <div class="complaint-header">
+                <h4>{{ complaint.title }}</h4>
+                <div class="similarity-badge">
+                    <span>{{ (score * 100)|int }}% match</span>
+                </div>
+            </div>
+            
+            <p class="complaint-meta">
+                <strong>Status:</strong> {{ complaint.status }} | 
+                <strong>Upvotes:</strong> {{ complaint.upvote_count }} |
+                <strong>Category:</strong> {{ complaint.category }}
+            </p>
+            
+            <p class="complaint-description">
+                {{ complaint.description[:200] }}{% if complaint.description|length > 200 %}...{% endif %}
+            </p>
+            
+            <div class="complaint-actions">
+                <a href="{{ url_for('complaints.view_complaint', complaint_id=complaint.id) }}" class="btn btn-secondary btn-sm" target="_blank">
+                    View Complaint →
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+        
+        <div class="duplicate-options">
+            <h3 style="margin-top: 1.5rem;">What would you like to do?</h3>
+            <p>Instead of creating a duplicate complaint, you can:</p>
+            <ul>
+                <li><strong>👍 Upvote</strong> - Click on the complaint above to upvote it and show your support</li>
+                <li><strong>💬 Add a Comment</strong> - Add additional details or your specific experience to the existing complaint</li>
+                <li><strong>➕ Create New Anyway</strong> - If your issue is significantly different, you can still create a new complaint</li>
+            </ul>
+        </div>
+    </div>
+
+    <form method="POST" class="form-inline" style="margin-top: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <input type="hidden" name="title" value="{{ title }}">
+        <input type="hidden" name="description" value="{{ description }}">
+        <input type="hidden" name="category" value="{{ category }}">
+        <input type="hidden" name="priority" value="{{ priority }}">
+        <input type="hidden" name="location" value="{{ location }}">
+        <input type="hidden" name="skip_duplicate_check" value="true">
+        
+        <button type="submit" class="btn btn-warning">
+            ➕ Create New Complaint Anyway
+        </button>
+        <a href="{{ url_for('complaints.student_dashboard') }}" class="btn">
+            ← Back to Dashboard
+        </a>
+    </form>
+</div>
+{% endif %}
+
+<!-- Complaint Form (Hidden when duplicates are shown) -->
+{% if not show_duplicate_warning %}
+<div class="card">
+    <form method="POST" class="complaint-form">
+        <div class="form-group">
+            <label for="title">Complaint Title *</label>
+            <input type="text" id="title" name="title" maxlength="200" required placeholder="Brief title of your complaint" value="{{ title or '' }}">
+            <p class="hint">Max 200 characters</p>
+            <div id="smartSuggestionBox" style="display: none; margin-top: 0.75rem; background: #fff5f5; border: 1px solid #feb2b2; border-left: 4px solid #e53e3e; border-radius: 6px; padding: 0.85rem;">
+                <h4 style="margin: 0 0 0.5rem 0; color: #c53030; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                    💡 Smart Suggestion Interceptor
+                </h4>
+                <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: #4a5568;">
+                    Existing pending complaints found at this exact location matching your keyword:
+                </p>
+                <ul id="suggestionList" style="margin: 0; padding-left: 1.2rem; font-size: 0.875rem;"></ul>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description *</label>
+            <textarea id="description" name="description" required placeholder="Provide detailed information about your complaint">{{ description or '' }}</textarea>
+            <p class="hint">Describe the issue in detail</p>
+        </div>
+
+        <div class="form-group">
+            <label for="category">Category *</label>
+            <select id="category" name="category" required onchange="checkConfidential()">
+                <option value="">-- Select Category --</option>
+                {% for cat in categories %}
+                    <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+            <p class="hint" id="categoryHint"></p>
+        </div>
+
+        <div class="form-group">
+            <label for="location">Location *</label>
+            <input type="text" id="location" name="location" maxlength="200" required placeholder="e.g. Room 301, Near Library, Block B Ground Floor" value="{{ location or '' }}">
+            <p class="hint">Specify where the complaint occurred (room number, building, area, etc.)</p>
+        </div>
+
+        <div id="confidentialSection" style="display: none;">
+            <div class="alert alert-warning">
+                <strong>⚠️ Confidential Complaint Warning:</strong>
+                <p>This category handles sensitive matters. Your complaint will be routed directly to the Principal and will NOT be visible to other staff.</p>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Submit Complaint</button>
+            <a href="{{ url_for('complaints.student_dashboard') }}" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Smart Suggestion Interceptor (Dual-Filter Location + Keyword)
+        const titleInput = document.getElementById('title');
+        const locationInput = document.getElementById('location');
+        const suggestionBox = document.getElementById('smartSuggestionBox');
+        const suggestionList = document.getElementById('suggestionList');
+
+        async function triggerSmartSuggestions() {
+            const titleValue = titleInput ? titleInput.value.trim() : '';
+            const locationValue = locationInput ? locationInput.value.trim() : '';
+
+            if (!suggestionBox || !suggestionList) return;
+
+            if (locationValue !== '' && titleValue.length >= 3) {
+                try {
+                    const response = await fetch('/api/search_complaints?q=' + encodeURIComponent(titleValue) + '&location=' + encodeURIComponent(locationValue));
+                    const complaints = await response.json();
+
+                    if (Array.isArray(complaints) && complaints.length > 0) {
+                        suggestionList.innerHTML = complaints.map(c => 
+                            `<li style="margin-bottom: 0.4rem; line-height: 1.4;">
+                                <a href="/complaints/${c.id}" target="_blank" style="font-weight: 600; color: #c53030; text-decoration: underline;">${escapeHtml(c.title)}</a> 
+                                <span class="badge status-pending" style="font-size:0.7rem; padding:0.15rem 0.4rem; margin-left: 0.3rem;">${escapeHtml(c.status)}</span> 
+                                <span style="font-size:0.8rem; color:#718096; margin-left: 0.3rem;">👍 ${c.upvote_count} upvotes</span>
+                            </li>`
+                        ).join('');
+                        suggestionBox.style.display = 'block';
+                    } else {
+                        suggestionBox.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error('Error fetching smart suggestions:', err);
+                    suggestionBox.style.display = 'none';
+                }
+            } else {
+                suggestionBox.style.display = 'none';
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        if (titleInput) titleInput.addEventListener('input', triggerSmartSuggestions);
+        if (locationInput) {
+            locationInput.addEventListener('input', triggerSmartSuggestions);
+            locationInput.addEventListener('change', triggerSmartSuggestions);
+        }
+    });
+
+    function checkConfidential() {
+        const category = document.getElementById('category').value;
+        const confidentialSection = document.getElementById('confidentialSection');
+        const categoryHint = document.getElementById('categoryHint');
+
+        const confidentialCategories = ['Ragging', 'Drug Abuse'];
+
+        if (confidentialCategories.includes(category)) {
+            confidentialSection.style.display = 'block';
+            categoryHint.textContent = '🔒 This is a confidential category';
+            categoryHint.style.color = 'var(--warning-color)';
+        } else {
+            confidentialSection.style.display = 'none';
+            categoryHint.textContent = '';
+        }
+    }
+
+    async function checkSimilarComplaints() {
+        const title = document.getElementById('title')?.value?.trim() || '';
+        const description = document.getElementById('description')?.value?.trim() || '';
+        const category = document.getElementById('category')?.value?.trim() || '';
+        const location = document.getElementById('location')?.value?.trim() || '';
+
+        if (!title || !description || !category || !location) return null;
+
+        try {
+            const response = await fetch('/api/complaints/similar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    description: description,
+                    category: category,
+                    location: location
+                })
+            });
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('Error checking similar complaints:', error);
+            return null;
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        checkConfidential();
+    });
+</script>
+
+<style>
+    .complaint-form {
+        max-width: 700px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .form-actions .btn {
+        flex: 1;
+    }
+
+    .duplicate-detection-section {
+        margin-top: 1rem;
+    }
+
+    .similar-complaint-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        transition: all 0.3s ease;
+    }
+
+    .similar-complaint-card:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        border-color: #495057;
+    }
+
+    .complaint-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .complaint-header h4 {
+        margin: 0;
+        flex: 1;
+        color: #495057;
+    }
+
+    .similarity-badge {
+        background: #fff3cd;
+        color: #856404;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .complaint-meta {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin: 0.5rem 0;
+    }
+
+    .complaint-description {
+        color: #495057;
+        margin: 0.75rem 0;
+        font-style: italic;
+    }
+
+    .complaint-actions {
+        margin-top: 1rem;
+    }
+
+    .btn-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    .duplicate-options {
+        background: #e7f3ff;
+        border-left: 4px solid #0066cc;
+        padding: 1rem;
+        border-radius: 4px;
+        margin: 1rem 0;
+    }
+
+    .duplicate-options ul {
+        margin: 0.5rem 0;
+        padding-left: 1.5rem;
+    }
+
+    .duplicate-options li {
+        margin: 0.5rem 0;
+        line-height: 1.5;
+    }
+
+    .form-inline {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .form-inline input {
+        display: none;
+    }
+
+    .btn-warning {
+        background: #ffc107;
+        color: #000;
+        border: 1px solid #ffc107;
+    }
+
+    .btn-warning:hover {
+        background: #e0a800;
+        border-color: #e0a800;
+    }
+
+    @media (max-width: 768px) {
+        .complaint-header {
+            flex-direction: column;
+        }
+
+        .similarity-badge {
+            align-self: flex-start;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .form-inline {
+            flex-direction: column;
+        }
+
+        .form-inline .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
