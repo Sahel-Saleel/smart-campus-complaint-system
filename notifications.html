@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Notifications</h1>
+    <div class="pagination-actions">
+        <form method="POST" action="/api/notifications/mark-all-read" style="display:inline;">
+            <button type="submit" class="btn btn-small">Mark All as Read</button>
+        </form>
+    </div>
+</div>
+
+{% if notifications %}
+    <div class="notifications-list">
+        {% for notification in notifications %}
+            <div class="notification-item {% if not notification.is_read %}unread{% endif %}">
+                <div class="notification-icon">
+                    {% if notification.notification_type == 'new_complaint' %}📝
+                    {% elif notification.notification_type == 'status_changed' %}✏️
+                    {% elif notification.notification_type == 'assigned' %}📌
+                    {% elif notification.notification_type == 'upvoted' %}👍
+                    {% endif %}
+                </div>
+                <div class="notification-content">
+                    <strong>{{ notification.title }}</strong>
+                    <p>{{ notification.message }}</p>
+                    <small>{{ notification.created_at }}</small>
+                </div>
+                <div class="notification-actions">
+                    {% if notification.complaint_id %}
+                        <a href="{{ url_for('complaints.view_complaint', complaint_id=notification.complaint_id) }}" class="btn btn-small">View</a>
+                    {% endif %}
+                    <button onclick="markAsRead({{ notification.id }})" class="btn btn-small">✓ Read</button>
+                    <button onclick="deleteNotification({{ notification.id }})" class="btn btn-danger btn-small">✕</button>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="?page={{ page - 1 }}" class="btn btn-small">← Previous</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}" class="btn btn-small">Next →</a>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <p>📭 You have no notifications</p>
+    </div>
+{% endif %}
+
+<style>
+    .notifications-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .notification-item {
+        background: var(--surface);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--light-gray);
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: flex;
+        gap: 1rem;
+        transition: all 0.3s;
+    }
+
+    body[data-theme="dark"] .notification-item {
+        background: linear-gradient(145deg, rgba(30, 35, 101, 0.97), rgba(18, 23, 73, 0.98));
+        border-color: rgba(103, 121, 255, 0.26);
+    }
+
+    .notification-item.unread {
+        background: #f4faff;
+        border-left-color: var(--secondary-color);
+    }
+
+    body[data-theme="dark"] .notification-item.unread {
+        background: linear-gradient(145deg, rgba(40, 47, 131, 0.97), rgba(24, 31, 95, 0.98));
+    }
+
+    .notification-icon {
+        font-size: 1.5rem;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    .notification-content {
+        flex: 1;
+    }
+
+    .notification-content strong {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: var(--primary-color);
+    }
+
+    .notification-content p {
+        margin-bottom: 0.5rem;
+        color: var(--text-color);
+        opacity: 0.9;
+        font-size: 0.95rem;
+    }
+
+    .notification-content small {
+        color: var(--text-color);
+        opacity: 0.6;
+    }
+
+    .notification-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+</style>
+
+<script>
+    async function markAsRead(notificationId) {
+        try {
+            const response = await fetch(`/api/notifications/${notificationId}/read`, {
+                method: 'PUT'
+            });
+            const data = await response.json();
+            if (data.success) location.reload();
+        } catch (e) {
+            alert('Error');
+        }
+    }
+
+    async function deleteNotification(notificationId) {
+        try {
+            const response = await fetch(`/api/notifications/${notificationId}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            if (data.success) location.reload();
+        } catch (e) {
+            alert('Error');
+        }
+    }
+</script>
+{% endblock %}

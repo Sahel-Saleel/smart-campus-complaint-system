@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Complaint Management System{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Worker Dashboard</h1>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>{{ stats.total }}</h3>
+        <p>Total Complaints</p>
+    </div>
+    <div class="stat-card pending">
+        <h3>{{ stats.pending }}</h3>
+        <p>Pending</p>
+    </div>
+    <div class="stat-card in-progress">
+        <h3>{{ stats.in_progress }}</h3>
+        <p>In Progress</p>
+    </div>
+    <div class="stat-card resolved">
+        <h3>{{ stats.resolved }}</h3>
+        <p>Resolved</p>
+    </div>
+</div>
+
+{% if active_complaints or resolved_complaints %}
+    {% if active_complaints %}
+        <div class="complaints-section">
+            <h2>Active Complaints</h2>
+            <div class="complaints-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Upvotes</th>
+                            <th>Submitted</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for complaint in active_complaints %}
+                            <tr>
+                                <td><strong>{{ complaint.title }}</strong></td>
+                                <td>{{ complaint.category }}</td>
+                                <td><span class="badge priority-{{ complaint.priority.lower() }}">{{ complaint.priority }}</span></td>
+                                <td><span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span></td>
+                                <td><span class="upvotes">👍 {{ complaint.upvote_count }}</span></td>
+                                <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <a href="{{ url_for('complaints.view_complaint', complaint_id=complaint.id) }}" class="btn btn-small">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if resolved_complaints %}
+        <div class="complaints-section">
+            <h2>Resolved Complaints</h2>
+            <div class="complaints-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Upvotes</th>
+                            <th>Submitted</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for complaint in resolved_complaints %}
+                            <tr>
+                                <td><strong>{{ complaint.title }}</strong></td>
+                                <td>{{ complaint.category }}</td>
+                                <td><span class="badge priority-{{ complaint.priority.lower() }}">{{ complaint.priority }}</span></td>
+                                <td><span class="badge status-{{ complaint.status.lower().replace(' ', '-') }}">{{ complaint.status }}</span></td>
+                                <td><span class="upvotes">👍 {{ complaint.upvote_count }}</span></td>
+                                <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <a href="{{ url_for('complaints.view_complaint', complaint_id=complaint.id) }}" class="btn btn-small">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="empty-state">
+        <p>📭 No assigned complaints available</p>
+    </div>
+{% endif %}
+
+<style>
+    .complaints-section {
+        margin-top: 1.5rem;
+    }
+
+    .complaints-section h2 {
+        margin-bottom: 0.75rem;
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}
